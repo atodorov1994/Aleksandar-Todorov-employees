@@ -1,6 +1,7 @@
 package com.employees.services;
 
 import com.employees.exception.BadRequestException;
+import com.employees.exception.NotFoundException;
 import com.employees.model.Employee;
 import com.opencsv.CSVParserBuilder;
 import com.opencsv.CSVReader;
@@ -36,64 +37,32 @@ public class CSVService {
         var parser = new CSVParserBuilder().withSeparator(',').build();
         var reader = new CSVReaderBuilder(new InputStreamReader(inputStream)).withCSVParser(parser).build();
         validateInput(reader);
-        List<Employee> employees = new CsvToBeanBuilder(reader).withType(Employee.class).withVerifier(getEmployeeVerifier()).build().parse();
-//        TreeSet<Employee> m = new TreeSet<>(employees);
-//        List<Employee> empl = new ArrayList<>(m);
-//        for (int i = 0; i < empl.size(); i++) {
-//            Employee e1 = empl.get(i);
-//            for (int j = i+1; j < empl.size(); j++) {
-//                if (emp)
-//
-//
-//            }
-//
-//        }
-
-        Map<String , Set<Employee>> employeesByProject = new HashMap<>();
-        for (int i = 1; i < employees.size(); i++) {
-            Employee e = employees.get(i);
-            String key = e.getProjectId();
-            if (!employeesByProject.containsKey(key)){
-                employeesByProject.put(key , new TreeSet<>());
-                employeesByProject.get(key).add(e);
-            }
-            else {
-                employeesByProject.get(key).add(e);
-            }
-        }
+        TreeSet<Employee> m = new TreeSet<>(new CsvToBeanBuilder(reader).withType(Employee.class).withVerifier(getEmployeeVerifier()).build().parse());
+        List<Employee> empl = new ArrayList<>(m);
         long maxDuration = 0;
         Employee e1 = null;
         Employee e2 = null;
-        for (Set<Employee> set : employeesByProject.values()) {
-            if (set.size() > 1) {
-                List<Employee> employeesSortedByFromDateAsc = new ArrayList<>(set);
-                for (int i = 0; i < employeesSortedByFromDateAsc.size(); i++) {
-                    LocalDateTime to = parseDate(employeesSortedByFromDateAsc.get(i).getDateTo());
-                    for (int j = i+1; j < employeesSortedByFromDateAsc.size(); j++) {
-                        LocalDateTime from = parseDate(employeesSortedByFromDateAsc.get(j).getDateFrom());
-                        if (to.isAfter(from)){
-                            long duration = ChronoUnit.DAYS.between(from , to);
-                            if (duration > maxDuration){
-                                maxDuration = duration;
-                                e1 = employeesSortedByFromDateAsc.get(i);
-                                e2 = employeesSortedByFromDateAsc.get(j);
-                            }
-                        }
-                    }
+        for (int i = 0; i < empl.size(); i++) {
+            Employee empl1 = empl.get(i);
+            LocalDateTime to = parseDate(empl1.getDateTo());
+            for (int j = i + 1; j < empl.size(); j++) {
+                Employee empl2 = empl.get(j);
+                if (!empl1.getProjectId().equals(empl2.getProjectId())) {
+                    continue;
+                }
+                LocalDateTime from = parseDate(empl2.getDateFrom());
+                long duration = ChronoUnit.DAYS.between(from, to);
+                if (duration > maxDuration) {
+                    maxDuration = duration;
+                    e1 = empl1;
+                    e2 = empl2;
                 }
             }
         }
-        if(grid.getColumns().size() == 1){
-            grid.removeAllColumns();
+        if(e1 == null){
+            throw new NotFoundException("No employees that worked together");
         }
-        if (grid.getColumns().size() == 0) {
-            grid.addColumn(row -> row[0]).setHeader("FileName");
-            grid.addColumn(row -> row[1]).setHeader("DateTime");
-            grid.addColumn(row -> row[2]).setHeader("EmplID#1");
-            grid.addColumn(row -> row[3]).setHeader("EmplID#2");
-            grid.addColumn(row -> row[4]).setHeader("ProjectID");
-            grid.addColumn(row -> row[5]).setHeader("DaysWorkedTogether");
-        }
+        manageGrid(grid);
         DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
         String[] result = {
                 fileName ,
@@ -104,6 +73,8 @@ public class CSVService {
                 e1.getProjectId() ,
                 String.valueOf(maxDuration)
         };
+
+//        Save history for user
         String key = request.getRemoteAddr();
         if (!DB.containsKey(key)){
             DB.put(key , new TreeSet<>((o1, o2) -> LocalDateTime.parse(o2[1] ,dtf)
@@ -154,7 +125,6 @@ public class CSVService {
         }
     }
 
-
     public static LocalDateTime parseDate(String date){
             DateTimeFormatter dtfInput = new DateTimeFormatterBuilder()
                     .parseCaseInsensitive()// For case-insensitive parsing
@@ -173,6 +143,20 @@ public class CSVService {
                     .parseDefaulting(ChronoField.NANO_OF_SECOND, 0)
                     .toFormatter(Locale.ENGLISH);
             return LocalDateTime.parse(date , dtfInput);
+    }
+
+    private void manageGrid(Grid<String[]> grid){
+        if(grid.getColumns().size() == 1){
+            grid.removeAllColumns();
+        }
+        if (grid.getColumns().size() == 0) {
+            grid.addColumn(row -> row[0]).setHeader("FileName");
+            grid.addColumn(row -> row[1]).setHeader("DateTime");
+            grid.addColumn(row -> row[2]).setHeader("EmplID#1");
+            grid.addColumn(row -> row[3]).setHeader("EmplID#2");
+            grid.addColumn(row -> row[4]).setHeader("ProjectID");
+            grid.addColumn(row -> row[5]).setHeader("DaysWorkedTogether");
+        }
     }
 
 }
