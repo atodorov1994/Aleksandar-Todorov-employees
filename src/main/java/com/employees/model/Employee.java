@@ -9,6 +9,7 @@ import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotEmpty;
 import javax.validation.constraints.Past;
 import javax.validation.constraints.PastOrPresent;
+import java.time.LocalDateTime;
 
 @Component
 @Data
@@ -27,9 +28,27 @@ public class Employee implements Comparable<Employee>{
         int compareFromDate = CSVService.parseDate(this.getDateFrom()).compareTo(CSVService.parseDate(o.getDateFrom()));
         int compareEmplId = this.getId().compareTo(o.getId());
         int compareProjectId = this.getProjectId().compareTo(o.getProjectId());
+        LocalDateTime otherFrom = CSVService.parseDate(o.getDateFrom());
+        LocalDateTime otherTo = CSVService.parseDate(o.getDateTo());
+        LocalDateTime from = CSVService.parseDate(this.getDateFrom());
+        LocalDateTime to = CSVService.parseDate(this.getDateTo());
         if(compareEmplId == 0){
             if (compareProjectId == 0){
-                return 0;
+                if (compareFromDate < 0){
+                    if (otherTo.isAfter(from)){
+                        return 0;
+                    }
+                    else {
+                        return 1;
+                    }
+                }else if (compareFromDate > 0){
+                    if (to.isAfter(otherFrom)){
+                        return 0;
+                    }
+                    else {
+                        return 1;
+                    }
+                }
             }
         }
         else if (compareFromDate == 0) {

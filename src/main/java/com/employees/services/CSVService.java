@@ -3,10 +3,13 @@ package com.employees.services;
 import com.employees.exception.BadRequestException;
 import com.employees.model.Employee;
 import com.opencsv.CSVParserBuilder;
+import com.opencsv.CSVReader;
 import com.opencsv.CSVReaderBuilder;
+import com.opencsv.bean.BeanVerifier;
 import com.opencsv.bean.CsvToBeanBuilder;
 import com.opencsv.exceptions.CsvValidationException;
 import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.upload.receivers.MemoryBuffer;
 import com.vaadin.flow.server.VaadinRequest;
 import lombok.SneakyThrows;
 import org.springframework.stereotype.Service;
@@ -14,6 +17,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
@@ -25,12 +29,26 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class CSVService {
     private static final Map<String , Set<String[]>> DB = new ConcurrentHashMap<>();
+    private static final int CSV_COLUMNS_SIZE = 4;
 
     @SneakyThrows
     public void showEmployeesWorkingTogether(InputStream inputStream , Grid<String[]> grid , String fileName , VaadinRequest request) {
         var parser = new CSVParserBuilder().withSeparator(',').build();
         var reader = new CSVReaderBuilder(new InputStreamReader(inputStream)).withCSVParser(parser).build();
-        List<Employee> employees = new CsvToBeanBuilder(reader).withType(Employee.class).build().parse();
+        validateInput(reader);
+        List<Employee> employees = new CsvToBeanBuilder(reader).withType(Employee.class).withVerifier(getEmployeeVerifier()).build().parse();
+//        TreeSet<Employee> m = new TreeSet<>(employees);
+//        List<Employee> empl = new ArrayList<>(m);
+//        for (int i = 0; i < empl.size(); i++) {
+//            Employee e1 = empl.get(i);
+//            for (int j = i+1; j < empl.size(); j++) {
+//                if (emp)
+//
+//
+//            }
+//
+//        }
+
         Map<String , Set<Employee>> employeesByProject = new HashMap<>();
         for (int i = 1; i < employees.size(); i++) {
             Employee e = employees.get(i);
@@ -65,6 +83,9 @@ public class CSVService {
                 }
             }
         }
+        if(grid.getColumns().size() == 1){
+            grid.removeAllColumns();
+        }
         if (grid.getColumns().size() == 0) {
             grid.addColumn(row -> row[0]).setHeader("FileName");
             grid.addColumn(row -> row[1]).setHeader("DateTime");
@@ -96,6 +117,44 @@ public class CSVService {
         grid.setItems(resultSet);
     }
 
+    private BeanVerifier getEmployeeVerifier() {
+        BeanVerifier<Employee> v = e -> {
+            if (e.getId().isBlank() || Integer.parseInt(e.getId()) < 1){
+                throw new BadRequestException("Invalid 'EmplID' value " + e.getId());
+            }
+            if (e.getProjectId().isBlank() || Integer.parseInt(e.getProjectId()) < 1){
+                throw new BadRequestException("Invalid 'ProjectID' value " + e.getProjectId());
+            }
+            if (e.getDateFrom().isBlank()){
+                throw new BadRequestException("Field 'dateFrom' is mandatory in 'EmplID'=" + e.getId() );
+            }
+            LocalDate from = parseDate(e.getDateFrom()).toLocalDate();
+            if (from.isAfter(LocalDate.now())){
+                throw new BadRequestException("Invalid 'fromDate' of 'EmplID'=" + e.getId());
+            }
+            LocalDate to = parseDate(e.getDateTo()).toLocalDate();
+            if (to.isAfter(LocalDate.now())){
+                throw new BadRequestException("Invalid 'toDate' of 'EmplID'=" + e.getId());
+            }
+            if (e.getDateTo().isBlank() || e.getDateTo().equalsIgnoreCase("NULL")){
+                e.setDateTo(LocalDate.now().toString());
+            }
+            if (from.isAfter(to)){
+                throw new BadRequestException("Invalid time interval of 'EmplID'=" + e.getId());
+            }
+            return true;
+        };
+        return v;
+    }
+
+    @SneakyThrows
+    private void validateInput(CSVReader reader) {
+        if (reader.readNextSilently().length != CSV_COLUMNS_SIZE){
+            throw new BadRequestException("Unsupported csv format");
+        }
+    }
+
+
     public static LocalDateTime parseDate(String date){
             DateTimeFormatter dtfInput = new DateTimeFormatterBuilder()
                     .parseCaseInsensitive()// For case-insensitive parsing
@@ -116,15 +175,4 @@ public class CSVService {
             return LocalDateTime.parse(date , dtfInput);
     }
 
-//    private void validateEmployee(Employee e){
-//        int userId = Integer.parseInt(e.getId());
-//        if (userId < 1){
-//            throw new BadRequestException("Invalid id");
-//        }
-//        int projectId = Integer.parseInt(e.getProjectId());
-//        if (projectId < 1){
-//            throw new BadRequestException()
-//        }
-//
-//    }
 }

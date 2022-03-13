@@ -29,7 +29,7 @@ public class CSVView extends VerticalLayout {
             try {
                 csvService.showEmployeesWorkingTogether(buffer.getInputStream(), grid, buffer.getFileName(), VaadinRequest.getCurrent());
             } catch (Exception ex) {
-                grid.deselectAll();
+                grid.removeAllColumns();
                 if (grid.getColumns().isEmpty()) {
                     grid.addColumn(row -> row[0]).setHeader("Error message");
                 }
